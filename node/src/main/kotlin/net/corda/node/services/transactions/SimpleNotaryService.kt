@@ -1,12 +1,16 @@
 package net.corda.node.services.transactions
 
+import net.corda.core.crypto.SecureHash
 import net.corda.core.flows.FlowSession
+import net.corda.core.flows.NotaryQuery
 import net.corda.core.internal.notary.SinglePartyNotaryService
 import net.corda.core.internal.notary.NotaryServiceFlow
+import net.corda.core.internal.notary.UniquenessProvider
 import net.corda.core.schemas.MappedSchema
 import net.corda.core.utilities.seconds
 import net.corda.node.services.api.ServiceHubInternal
 import java.security.PublicKey
+import java.time.Instant
 
 /** An embedded notary service that uses the node's database to store committed states. */
 class SimpleNotaryService(override val services: ServiceHubInternal, override val notaryIdentityKey: PublicKey) : SinglePartyNotaryService() {
@@ -29,6 +33,23 @@ class SimpleNotaryService(override val services: ServiceHubInternal, override va
             ValidatingNotaryFlow(otherPartySession, this, notaryConfig.etaMessageThresholdSeconds.seconds)
         } else {
             NonValidatingNotaryFlow(otherPartySession, this, notaryConfig.etaMessageThresholdSeconds.seconds)
+        }
+    }
+
+    // TODO: Revert this override - for basic testing in OS before implementing in ENT
+    // standalone JPA notary
+    override fun processQuery(query: NotaryQuery.Request): NotaryQuery.Result {
+        // In practice this would now delegate the the uniqueness provider
+        return when (query) {
+            is NotaryQuery.Request.SpentStates ->
+                NotaryQuery.Result.SpentStates(listOf(
+                    NotaryQuery.SpendEventDetails(Instant.now(),
+                            SecureHash.randomSHA256().toString(),
+                            "SUCCESS",
+                            services.myInfo.legalIdentities.first().toString(),
+                            services.myInfo.legalIdentities.first().toString())))
+            else ->
+                throw UnsupportedOperationException()
         }
     }
 
